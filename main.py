@@ -2,20 +2,10 @@ from flask import Flask, jsonify, render_template, request, json
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import Integer, String, Boolean, func
-import random
+import os
+from dotenv import load_dotenv
 
-'''
-Install the required packages first: 
-Open the Terminal in PyCharm (bottom left). 
-
-On Windows type:
-python -m pip install -r requirements.txt
-
-On MacOS type:
-pip3 install -r requirements.txt
-
-This will install the packages from requirements.txt for this project.
-'''
+load_dotenv()
 
 app = Flask(__name__)
 app.config['JSON_SORT_KEYS'] = False
@@ -50,7 +40,6 @@ class Cafe(db.Model):
 with app.app_context():
     db.create_all()
 
-
 @app.route("/")
 def home():
     return render_template("index.html")
@@ -81,6 +70,44 @@ def search_location():
     
     return jsonify({"cafes": [cafe.to_dict() for cafe in cafes]})
 
+@app.route("/add", methods=["POST"])
+def add_cafe():
+    new_cafe = Cafe(
+        name=request.form.get("name"),  # type: ignore
+        location=request.form.get("location"),) # type: ignore
+    
+    return jsonify({"response": {"success": "Successfully added the new cafe."}})
+
+@app.patch("/update_price/<cafe_id>")
+def update_price(cafe_id: int):
+    try:
+        new_price = request.args.get("new_price")
+        cafe_to_change = db.session.execute(db.select(Cafe).where(Cafe.id == cafe_id)).scalar_one_or_none()
+        if cafe_to_change is None:
+            raise AttributeError
+        cafe_to_change.coffee_price = new_price # type: ignore
+        db.session.commit()
+    except AttributeError:
+        return jsonify({"error": {"Not Found": "Sorry, the cafe with that id was not found in the database"}})
+    
+    return jsonify({"success": "Successfully updated the price"})
+        
+@app.delete("/report_closed/<cafe_id>")
+def delete_cafe(cafe_id: int):
+    x_api_key = os.environ.get("X_API_KEY")
+    api_key = request.args.get("api-key")
+    if api_key != x_api_key:
+        return jsonify({"error": "Sorry that is not allowed, make sure you have the correct api key"})
+    try:
+        cafe_to_change = db.session.execute(db.select(Cafe).where(Cafe.id == cafe_id)).scalar_one_or_none()
+        if cafe_to_change is None:
+            raise AttributeError
+        db.session.delete(cafe_to_change)
+        db.session.commit()
+    except AttributeError:
+        return jsonify({"error": {"Not Found": "Sorry, the cafe with that id was not found in the database"}})
+    
+    return jsonify({"Success": "Successfully deleted the cafe from the database"})
 
 if __name__ == '__main__':
     app.run(debug=True)
